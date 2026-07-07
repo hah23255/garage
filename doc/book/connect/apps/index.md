@@ -547,7 +547,7 @@ ejabberdctl module_install mod_s3_upload
 Create the required key and bucket with:
 
 ```bash
-garage key new --name ejabberd
+garage key create ejabberd
 garage bucket create objects.xmpp-server.fr
 garage bucket allow objects.xmpp-server.fr --read --write --key ejabberd
 garage bucket website --allow objects.xmpp-server.fr
@@ -678,7 +678,7 @@ For more information on deployment you can check the [ente documentation](https:
 This is the usual Garage setup:
 
 ```bash
-garage key new --name pleroma-key
+garage key create pleroma-key
 garage bucket create pleroma
 garage bucket allow pleroma --read --write --owner --key pleroma-key
 ```
@@ -759,7 +759,7 @@ This feature requires `pict-rs >= 4.0.0`.
 This is the usual Garage setup:
 
 ```bash
-garage key new --name pictrs-key
+garage key create pictrs-key
 garage bucket create pictrs-data
 garage bucket allow pictrs-data --read --write --key pictrs-key
 ```

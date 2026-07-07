@@ -22,7 +22,7 @@ Note that `git-annex` requires to be compiled with Haskell package version
 `aws-0.24` to work with Garage.
 
 ```bash
-garage key new --name my-key
+garage key create my-key
 garage bucket create my-git-annex
 garage bucket allow my-git-annex --read --write --key my-key
 ```

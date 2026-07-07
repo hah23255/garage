@@ -27,7 +27,7 @@ which support storing metrics in an object store:
 This can be configured with Garage with the following:
 
 ```bash
-garage key new --name vector-system-logs
+garage key create vector-system-logs
 garage bucket create system-logs
 garage bucket allow system-logs --read --write --key vector-system-logs
 ```
