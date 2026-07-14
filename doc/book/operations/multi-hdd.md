@@ -68,10 +68,11 @@ To rebalance data, two strategies can be used:
   secondary directory. This might never end up rebalancing everything if there
   are data blocks that are only read and never written.
 
-- Active rebalancing: an operator of a Garage node can explicitly launch a repair
-  procedure that rebalances the data directories, moving all blocks to their
-  primary location. Once done, all secondary locations for all hash slices are
-  removed so that they won't be checked anymore when looking for a data block.
+- Active rebalancing: an operator of a Garage node can [explicitly launch a
+  repair procedure](@/documentation/operations/durability-repairs.md#rebalance)
+  that rebalances the data directories, moving all blocks to their primary
+  location. Once done, all secondary locations for all hash slices are removed
+  so that they won't be checked anymore when looking for a data block.
 
 ## Read-only storage locations
 

@@ -91,7 +91,7 @@ is definitely lost, then there is no other choice than to declare your S3 object
 as unrecoverable, and to delete them properly from the data store. This can be done
 using the `garage block purge` command.
 
-## Rebalancing data directories
+## Rebalancing data directories {#rebalance}
 
 In [multi-HDD setups](@/documentation/operations/multi-hdd.md), to ensure that
 data blocks are well balanced between storage locations, you may run a
