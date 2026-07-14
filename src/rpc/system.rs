@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use std::io::{Read, Write};
 use std::net::{IpAddr, SocketAddr};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, RwLock, RwLockReadGuard};
+use std::sync::{Arc, Mutex, RwLock, RwLockReadGuard};
 use std::time::{Duration, Instant};
 
 use arc_swap::ArcSwapOption;
@@ -24,6 +24,7 @@ use garage_util::config::KubernetesDiscoveryConfig;
 use garage_util::config::{Config, DataDirEnum};
 use garage_util::data::*;
 use garage_util::error::*;
+use garage_util::migrate::Migrate;
 use garage_util::persister::Persister;
 use garage_util::time::*;
 
@@ -89,6 +90,9 @@ pub struct System {
 	pub id: Uuid,
 
 	persist_peer_list: Persister<PeerList>,
+	// Cache of the bytes last read from / written to the peer list file,
+	// to avoid waking up the disk with a read on every save_peer_list() call.
+	cached_peer_list_bytes: Mutex<Option<Vec<u8>>>,
 
 	pub(crate) local_status: RwLock<NodeStatus>,
 	node_status: RwLock<HashMap<Uuid, (u64, NodeStatus)>>,
@@ -311,6 +315,7 @@ impl System {
 		let sys = Arc::new(System {
 			id: netapp.id.into(),
 			persist_peer_list,
+			cached_peer_list_bytes: Mutex::new(None),
 			local_status: RwLock::new(local_status),
 			node_status: RwLock::new(HashMap::new()),
 			netapp: netapp.clone(),
@@ -779,10 +784,23 @@ impl System {
 			peer_list.extend(prev_peer_list.0);
 		}
 
-		// Save new peer list to file
-		self.persist_peer_list
-			.save_async(&PeerList(peer_list))
-			.await
+		// Sort for a deterministic encoding, so that we can detect below
+		// whether the peer list actually changed since last time.
+		peer_list.sort_by_key(|(id, _)| *id);
+
+		let new_peer_list = PeerList(peer_list);
+		let new_peer_list_bytes = new_peer_list.encode()?;
+
+		// Skip writing to disk if nothing changed since the last save,
+		// but still cache the bytes so we don't have to read the file again.
+		let cached_peer_list_bytes = self.cached_peer_list_bytes.lock().unwrap().clone();
+		if cached_peer_list_bytes.as_deref() == Some(&new_peer_list_bytes[..]) {
+			return Ok(());
+		}
+
+		self.persist_peer_list.save_async(&new_peer_list).await?;
+		*self.cached_peer_list_bytes.lock().unwrap() = Some(new_peer_list_bytes);
+		Ok(())
 	}
 }
 
