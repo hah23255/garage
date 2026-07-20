@@ -25,6 +25,13 @@ garage bucket website --allow my-website
 
 Now it will be **publicly** exposed on the web endpoint (by default listening on port 3902).
 
+> The bucket needs to have a *global alias* to be exposed as a website. If the
+> bucket was created with `garage bucket create` it will have an alias;
+> if created via the S3 API [you will have to manually add the alias
+> ](https://git.deuxfleurs.fr/Deuxfleurs/garage/issues/742) first.
+> Creating globally aliased buckets from the S3 API is [currently under
+> discussion](https://git.deuxfleurs.fr/Deuxfleurs/garage/issues/649).
+
 ## How exposed websites work
 
 Our website serving logic is as follow:
