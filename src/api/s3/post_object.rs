@@ -83,10 +83,12 @@ pub async fn handle_post_object(
 	};
 
 	// Current part is file. Do some checks before handling to PutObject code
-	let key = params
-		.get("key")
-		.ok_or_bad_request("No key was provided")?
-		.to_str()?;
+	let key = std::str::from_utf8(
+		params
+			.get("key")
+			.ok_or_bad_request("No key was provided")?
+			.as_bytes(),
+	)?;
 	let policy = params
 		.get("policy")
 		.ok_or_bad_request("No policy was provided")?

@@ -679,7 +679,10 @@ pub(crate) fn extract_metadata_headers(
 	];
 	for name in standard_header.iter() {
 		if let Some(value) = headers.get(name) {
-			ret.push((name.to_string(), value.to_str()?.to_string()));
+			ret.push((
+				name.to_string(),
+				std::str::from_utf8(value.as_bytes())?.to_string(),
+			));
 		}
 	}
 

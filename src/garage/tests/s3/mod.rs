@@ -2,6 +2,7 @@ mod cors;
 mod list;
 mod multipart;
 mod objects;
+mod postobject;
 mod presigned;
 mod signature_encoding;
 mod simple;
