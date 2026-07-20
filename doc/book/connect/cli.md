@@ -268,7 +268,7 @@ duck --delete garage:/my-files/an-object.txt
 
 ## WinSCP (libs3) {#winscp}
 
-*You can find instructions on how to use the GUI in french [in our wiki](https://guide.deuxfleurs.fr/prise_en_main/winscp/).*
+*You can find instructions on how to use the GUI in french [in our wiki](https://guide.deuxfleurs.fr/services/winscp/).*
 
 How to use `winscp.com`, the CLI interface of WinSCP:
 
