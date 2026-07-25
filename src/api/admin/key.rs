@@ -188,30 +188,34 @@ async fn key_info_results(
 	key: Key,
 	show_secret: bool,
 ) -> Result<GetKeyInfoResponse, Error> {
-	let mut relevant_buckets = HashMap::new();
-
 	let key_state = key.state.as_option().unwrap();
 
-	for id in key_state
+	let buckets1 = key_state
 		.authorized_buckets
 		.items()
 		.iter()
-		.map(|(id, _)| id)
-		.chain(
-			key_state
-				.local_aliases
-				.items()
-				.iter()
-				.filter_map(|(_, _, v)| v.inner()),
-		) {
-		if !relevant_buckets.contains_key(id) {
-			if let Some(b) = garage.bucket_table.get(&EmptyKey, id).await? {
-				if b.state.as_option().is_some() {
-					relevant_buckets.insert(*id, b);
-				}
+		.filter(|(_, p)| p.is_any())
+		.map(|(id, _)| id);
+	let buckets2 = key_state
+		.local_aliases
+		.items()
+		.iter()
+		.filter_map(|(_, _, v)| v.inner());
+
+	let mut relevant_buckets = HashMap::new();
+	for bucket_id in buckets1.chain(buckets2) {
+		if !relevant_buckets.contains_key(bucket_id) {
+			if let Some(b) = garage.bucket_table.get(&EmptyKey, bucket_id).await? {
+				relevant_buckets.insert(*bucket_id, b);
+			} else {
+				warn!(
+					"Key {} references non-existent bucket {:?}",
+					key.key_id, bucket_id
+				);
 			}
 		}
 	}
+	relevant_buckets.retain(|_, b| !b.is_deleted());
 
 	let res = GetKeyInfoResponse {
 		name: key_state.name.get().clone(),
@@ -233,7 +237,7 @@ async fn key_info_results(
 		},
 		buckets: relevant_buckets
 			.into_values()
-			.filter_map(|bucket| {
+			.map(|bucket| {
 				let state = bucket.state.as_option().unwrap();
 				let permissions = key_state
 					.authorized_buckets
@@ -243,8 +247,9 @@ async fn key_info_results(
 						read: p.allow_read,
 						write: p.allow_write,
 						owner: p.allow_owner,
-					})?;
-				Some(KeyInfoBucketResponse {
+					})
+					.unwrap_or_default();
+				KeyInfoBucketResponse {
 					id: hex::encode(bucket.id),
 					global_aliases: state
 						.aliases
@@ -261,7 +266,7 @@ async fn key_info_results(
 						.map(|((_, n), _, _)| n.to_string())
 						.collect::<Vec<_>>(),
 					permissions,
-				})
+				}
 			})
 			.collect::<Vec<_>>(),
 	};

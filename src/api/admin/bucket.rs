@@ -690,45 +690,36 @@ async fn bucket_info_results(
 		.map(|x| x.filtered_values(&garage.system.cluster_layout()))
 		.unwrap_or_default();
 
-	let mut relevant_keys = HashMap::new();
-	for (k, _) in bucket
-		.state
-		.as_option()
-		.unwrap()
+	let state = bucket.state.as_option().unwrap();
+
+	let keys1 = state
 		.authorized_keys
 		.items()
 		.iter()
-	{
-		if let Some(key) = garage
-			.key_table
-			.get(&EmptyKey, k)
-			.await?
-			.filter(|k| !k.is_deleted())
-		{
-			if !key.state.is_deleted() {
-				relevant_keys.insert(k.clone(), key);
-			}
-		}
-	}
-	for ((k, _), _, _) in bucket
-		.state
-		.as_option()
-		.unwrap()
+		.filter(|(_, p)| p.is_any())
+		.map(|(k, _)| k);
+	let keys2 = state
 		.local_aliases
 		.items()
 		.iter()
-	{
-		if relevant_keys.contains_key(k) {
+		.filter(|(_, _, p)| *p)
+		.map(|((k, _), _, _)| k);
+
+	let mut relevant_keys = HashMap::new();
+	for key_id in keys1.chain(keys2) {
+		if relevant_keys.contains_key(key_id) {
 			continue;
 		}
-		if let Some(key) = garage.key_table.get(&EmptyKey, k).await? {
-			if !key.state.is_deleted() {
-				relevant_keys.insert(k.clone(), key);
-			}
+		if let Some(key) = garage.key_table.get(&EmptyKey, key_id).await? {
+			relevant_keys.insert(key_id.clone(), key);
+		} else {
+			warn!(
+				"Bucket {:?} references non-existent key {}",
+				bucket.id, key_id
+			);
 		}
 	}
-
-	let state = bucket.state.as_option().unwrap();
+	relevant_keys.retain(|_, k| !k.is_deleted());
 
 	let quotas = state.quotas.get();
 	let res = GetBucketInfoResponse {
@@ -768,29 +759,30 @@ async fn bucket_info_results(
 		}),
 		keys: relevant_keys
 			.into_values()
-			.filter_map(|key| {
-				let p = key.state.as_option().unwrap();
-				let permissions = p
+			.map(|key| {
+				let st = key.state.as_option().unwrap();
+				let permissions = st
 					.authorized_buckets
 					.get(&bucket.id)
-					.filter(|p| p.is_any())
 					.map(|p| ApiBucketKeyPerm {
 						read: p.allow_read,
 						write: p.allow_write,
 						owner: p.allow_owner,
-					})?;
-				Some(GetBucketInfoKey {
+					})
+					.unwrap_or_default();
+				let bucket_local_aliases = st
+					.local_aliases
+					.items()
+					.iter()
+					.filter(|(_, _, b)| b.into_inner() == Some(bucket.id))
+					.map(|(n, _, _)| n.to_string())
+					.collect::<Vec<_>>();
+				GetBucketInfoKey {
 					access_key_id: key.key_id,
-					name: p.name.get().to_string(),
+					name: st.name.get().to_string(),
 					permissions,
-					bucket_local_aliases: p
-						.local_aliases
-						.items()
-						.iter()
-						.filter(|(_, _, b)| b.into_inner() == Some(bucket.id))
-						.map(|(n, _, _)| n.to_string())
-						.collect::<Vec<_>>(),
-				})
+					bucket_local_aliases,
+				}
 			})
 			.collect::<Vec<_>>(),
 		objects: *counters.get(OBJECTS).unwrap_or(&0),
