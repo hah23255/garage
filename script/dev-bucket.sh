@@ -18,7 +18,7 @@ fi
 
 $GARAGE_BIN -c /tmp/config.1.toml bucket create eprouvette
 if [ "$GARAGE_OLDVER" = "v08" ]; then
-	KEY_INFO=$($GARAGE_BIN -c /tmp/config.1.toml key create opérateur)
+	KEY_INFO=$($GARAGE_BIN -c /tmp/config.1.toml key new --name opérateur)
 	ACCESS_KEY=`echo $KEY_INFO|grep -Po 'GK[a-f0-9]+'`
 	SECRET_KEY=`echo $KEY_INFO|grep -Po 'Secret key: [a-f0-9]+'|grep -Po '[a-f0-9]+$'`
 elif [ "$GARAGE_OLDVER" = "v1" ]; then
