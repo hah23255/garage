@@ -133,12 +133,17 @@ Use the following command to launch the Garage server:
 garage server --single-node --default-bucket
 ```
 
-The `--single-node` flag instructs Garage to automatically configure a single-node cluster without data replication.
-The `--default-bucket` flag instructs Garage to create a default access key and a default bucket using the environment variables we defined above.
-Both flags are optional and can be omitted, in which case you will have to follow manual configuration steps described below.
+- the `--single-node` flag instructs Garage to automatically configure a
+  single-node cluster without data replication;
+- the `--default-bucket` flag instructs Garage to create a default access key
+  and a default bucket using the environment variables we defined above (it
+  implies `--default-access-key`).
 
-**For older versions of Garage (before v2.3.0):** automatic configuration using `--single-node` and `--default-bucket` is not available,
-you must follow the manual configuration steps.
+> You can refer to the [manual configuration
+> steps](#manual-configuration) if:
+>
+> - you decide to no use these optional flags;
+> - you are running an **older version of Garage (before v2.3.0)**.
 
 Alternatively, if you cannot or do not wish to run the Garage binary directly,
 you may use Docker to run Garage in a container using the following command:
@@ -292,7 +297,7 @@ An exhaustive list is maintained in the ["Integrations" > "Browsing tools" secti
 
 
 
-## Manual configuration
+## Manual configuration {#manual-configuration}
 
 This section provides instructions that are equivalent to using the
 `--single-node` and `--default-bucket` flags for automatic configuration.  If
