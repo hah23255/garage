@@ -276,6 +276,11 @@ fn init_logging(opt: &Opt) {
 	tracing_subscriber::fmt()
 		.with_writer(std::io::stderr)
 		.with_env_filter(env_filter)
+		.with_ansi(
+			std::env::var("NO_COLOR")
+				.map(|x| x != "0" && !x.eq_ignore_ascii_case("false"))
+				.unwrap_or(true),
+		)
 		.init();
 }
 
