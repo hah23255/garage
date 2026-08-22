@@ -152,6 +152,14 @@ pub async fn run_server(
 		}
 	}
 
+	// Deregister from Consul (if enabled) in the background, in parallel with the
+	// rest of the shutdown sequence, so that it doesn't add to shutdown latency.
+	#[cfg(feature = "consul-discovery")]
+	let deregister_consul_task = tokio::spawn({
+		let system = garage.system.clone();
+		async move { system.deregister_from_discovery().await }
+	});
+
 	// Remove RPC handlers for system to break reference cycles
 	info!("Deregistering RPC handlers for shutdown...");
 	garage.system.netapp.drop_all_handlers();
@@ -167,6 +175,12 @@ pub async fn run_server(
 
 	// Await for all background tasks to end
 	await_background_done.await?;
+
+	// Await for Consul deregistration to end, if it hasn't already
+	#[cfg(feature = "consul-discovery")]
+	if let Err(e) = deregister_consul_task.await {
+		error!("Error while joining Consul deregistration task: {}", e);
+	}
 
 	info!("Cleaning up...");
 

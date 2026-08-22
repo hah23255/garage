@@ -183,6 +183,36 @@ impl ConsulDiscovery {
 	}
 	// ---- PUBLISHING TO CONSUL CATALOG ----
 
+	#[cfg(feature = "consul-discovery")]
+	pub async fn deregister_consul_service(&self, node_id: NodeID) -> Result<(), ConsulError> {
+		let node = format!("garage:{}", hex::encode(&node_id[..8]));
+		let url = format!(
+			"{}/v1/{}",
+			self.config.consul_http_addr,
+			(match &self.config.api {
+				ConsulDiscoveryAPI::Catalog => format!("catalog/deregister"),
+				ConsulDiscoveryAPI::Agent => format!("agent/service/deregister/{}", node),
+			})
+		);
+
+		let req = self.client.put(&url);
+
+		let http = if matches!(&self.config.api, ConsulDiscoveryAPI::Catalog) {
+			let deregister_request = serde_json::json!({
+				"Node": node,
+				"ServiceID": node,
+			});
+			let req = req.json(&deregister_request);
+			req.send().await?
+		} else {
+			req.send().await?
+		};
+		http.error_for_status()?;
+
+		debug!("Deregistered service {} from Consul", node);
+		Ok(())
+	}
+
 	pub async fn publish_consul_service(
 		&self,
 		node_id: NodeID,

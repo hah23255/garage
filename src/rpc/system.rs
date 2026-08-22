@@ -358,7 +358,7 @@ impl System {
 		);
 	}
 
-	pub fn cleanup(&self) {
+	pub fn cleanup(self: &Arc<Self>) {
 		// Break reference cycle
 		self.metrics.store(None);
 	}
@@ -646,6 +646,15 @@ impl System {
 			select! {
 				_ = tokio::time::sleep_until(restart_at.into()) => {},
 				_ = stop_signal.changed() => {},
+			}
+		}
+	}
+
+	#[cfg(feature = "consul-discovery")]
+	pub async fn deregister_from_discovery(self: &Arc<Self>) {
+		if let Some(c) = &self.consul_discovery {
+			if let Err(e) = c.deregister_consul_service(self.netapp.id).await {
+				error!("Error while deregistering from Consul: {}", e);
 			}
 		}
 	}
