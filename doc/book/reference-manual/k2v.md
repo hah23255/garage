@@ -8,12 +8,11 @@ which is an alternative storage API designed to help efficiently store
 many small values in buckets (in opposition to S3 which is more designed
 to store large blobs).
 
-K2V is currently disabled at compile time in all builds, as the
-specification is still subject to changes. To build a Garage version with
-K2V, the Cargo feature flag `k2v` must be activated.  Special builds with
-the `k2v` feature flag enabled can be obtained from our download page under
-"Extra builds": such builds can be identified easily as their tag name ends
-with `-k2v` (example: `v0.7.2-k2v`).
+K2V is included in release builds since version 0.8.0. Precompiled builds
+of earlier versions including `k2v` can be found in our download page under
+"Extra builds": they can be easily identified as their tag name ends with
+`-k2v` (example: `v0.7.2-k2v`). Otherwise, when compiling Garage, the Cargo
+feature flag `k2v` must be activated.
 
 The specification of the K2V API can be found
 [here](https://git.deuxfleurs.fr/Deuxfleurs/garage/src/commit/f8be15c37db857e177d543de7be863692628d567/doc/drafts/k2v-spec.md).
