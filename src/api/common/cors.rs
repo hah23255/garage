@@ -47,13 +47,24 @@ where
 	HI: Iterator<Item = S>,
 	S: AsRef<str>,
 {
-	rule.allow_origins.iter().any(|x| x == "*" || x == origin)
+	rule.allow_origins.iter().any(|x| wildcard_match(x, origin))
 		&& rule.allow_methods.iter().any(|x| x == "*" || x == method)
 		&& request_headers.all(|h| {
 			rule.allow_headers
 				.iter()
-				.any(|x| x == "*" || x == h.as_ref())
+				.any(|x| wildcard_match(x, h.as_ref()))
 		})
+}
+
+/// Checks whether `candidate` matches the pattern `allowed_wildcard`.
+#[inline]
+fn wildcard_match(allowed_wildcard: &String, candidate: &str) -> bool {
+	if allowed_wildcard.contains("*") {
+		let parts = allowed_wildcard.split("*").collect::<Vec<&str>>();
+		parts.len() == 2 && candidate.starts_with(parts[0]) && candidate.ends_with(parts[1])
+	} else {
+		candidate == allowed_wildcard
+	}
 }
 
 pub fn add_cors_headers(
@@ -189,6 +200,221 @@ pub fn handle_options_for_bucket<B>(
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	fn cors_rule(
+		allow_origins: &[&str],
+		allow_methods: &[&str],
+		allow_headers: &[&str],
+	) -> GarageCorsRule {
+		GarageCorsRule {
+			id: None,
+			max_age_seconds: None,
+			allow_origins: allow_origins.iter().map(|s| s.to_string()).collect(),
+			allow_methods: allow_methods.iter().map(|s| s.to_string()).collect(),
+			allow_headers: allow_headers.iter().map(|s| s.to_string()).collect(),
+			expose_headers: vec![],
+		}
+	}
+
+	#[test]
+	fn matches_when_origin_method_and_headers_are_explicitly_allowed() {
+		let rule = cors_rule(
+			&["https://app.example.test"],
+			&["GET", "PUT"],
+			&["content-type", "x-custom"],
+		);
+		let headers = vec!["content-type", "x-custom"];
+
+		assert!(cors_rule_matches(
+			&rule,
+			"https://app.example.test",
+			"PUT",
+			headers.iter(),
+		));
+	}
+
+	#[test]
+	fn does_not_match_when_origin_is_not_allowed() {
+		let rule = cors_rule(&["https://app.example.test"], &["GET"], &["*"]);
+
+		assert!(!cors_rule_matches(
+			&rule,
+			"https://evil.example.test",
+			"GET",
+			std::iter::empty::<&str>(),
+		));
+	}
+
+	#[test]
+	fn does_not_match_when_method_is_not_allowed() {
+		let rule = cors_rule(&["*"], &["GET"], &["*"]);
+
+		assert!(!cors_rule_matches(
+			&rule,
+			"https://app.example.test",
+			"DELETE",
+			std::iter::empty::<&str>(),
+		));
+	}
+
+	#[test]
+	fn does_not_match_when_a_requested_header_is_not_allowed() {
+		let rule = cors_rule(&["*"], &["GET"], &["content-type"]);
+		let headers = vec!["content-type", "x-not-allowed"];
+
+		assert!(!cors_rule_matches(
+			&rule,
+			"https://app.example.test",
+			"GET",
+			headers.iter(),
+		));
+	}
+
+	#[test]
+	fn wildcard_origin_method_and_headers_match_anything() {
+		let rule = cors_rule(&["*"], &["*"], &["*"]);
+		let headers = vec!["x-anything"];
+
+		assert!(cors_rule_matches(
+			&rule,
+			"https://app.example.test",
+			"DELETE",
+			headers.iter(),
+		));
+	}
+
+	#[test]
+	fn wildcard_origin_regex() {
+		let rule = cors_rule(&["https://*.localhost.com"], &["*"], &["*"]);
+		let headers = vec!["x-anything"];
+
+		assert!(cors_rule_matches(
+			&rule,
+			"https://s3.localhost.com",
+			"DELETE",
+			headers.iter(),
+		));
+	}
+
+	#[test]
+	fn origin_matching_cases() {
+		// (allow_origins, origin, expect_match)
+		let cases: &[(&[&str], &str, bool)] = &[
+			// exact match
+			(
+				&["https://app.example.test"],
+				"https://app.example.test",
+				true,
+			),
+			(
+				&["https://app.example.test"],
+				"https://other.example.test",
+				false,
+			),
+			// full wildcard
+			(&["*"], "https://anything.example.test", true),
+			// subdomain glob
+			(
+				&["https://*.example.test"],
+				"https://foo.example.test",
+				true,
+			),
+			(&["https://*.example.test"], "https://example.test", false),
+			(
+				&["https://*.example.test"],
+				"http://foo.example.test",
+				false,
+			),
+			// multiple allowed origins, at least one should match
+			(
+				&["https://a.example.test", "https://b.example.test"],
+				"https://b.example.test",
+				true,
+			),
+			// match multiple origins
+			(
+				&["https://a*.example.test", "https://ab*.example.test"],
+				"https://abc.example.test",
+				true,
+			),
+			(
+				&["https://a.example.test", "https://b.example.test"],
+				"https://c.example.test",
+				false,
+			),
+			// at most one '*' in a pattern is allowed
+			(&["https://*.example.*"], "https://a.example.test", false),
+			// domain changed with wildcard
+			(
+				&["https://*example.test"],
+				"https://garageexample.test",
+				true,
+			),
+			// trailing '*' matches any suffix, including the empty string,
+			// so this also matches origins with anything (or nothing) after
+			// "example."
+			(&["https://example.*"], "https://example.test", true),
+			(&["https://*example.test"], "https://example.test", true),
+			(&["https://example.*"], "https://example.", true),
+		];
+
+		for (allow_origins, origin, expect_match) in cases {
+			let rule = cors_rule(allow_origins, &["GET"], &["*"]);
+			let got = cors_rule_matches(&rule, origin, "GET", std::iter::empty::<&str>());
+			assert_eq!(
+				got, *expect_match,
+				"allow_origins={allow_origins:?}, origin={origin:?}: expected match={expect_match}, got {got}"
+			);
+		}
+	}
+
+	#[test]
+	fn header_matching_cases() {
+		// (allow_headers, requested_headers, expect_match)
+		let cases: &[(&[&str], &[&str], bool)] = &[
+			// exact match
+			(&["content-type"], &["content-type"], true),
+			(&["content-type"], &["x-custom"], false),
+			// full wildcard
+			(&["*"], &["x-anything"], true),
+			// no headers requested always matches, regardless of allow_headers
+			(&["content-type"], &[], true),
+			(&[], &[], true),
+			// prefix glob
+			(&["x-amz-*"], &["x-amz-meta-foo"], true),
+			(&["x-amz-*"], &["x-amz-"], true),
+			(&["x-amz-*"], &["x-other"], false),
+			// suffix glob
+			(&["*-meta"], &["foo-meta"], true),
+			(&["*-meta"], &["-meta"], true),
+			(&["*-meta"], &["foo-meta-bar"], false),
+			// multiple allowed headers, at least one should match per requested header
+			(
+				&["content-type", "x-amz-*"],
+				&["content-type", "x-amz-meta-foo"],
+				true,
+			),
+			(&["content-type", "x-amz-*"], &["x-other"], false),
+			// all requested headers must be covered
+			(&["content-type"], &["content-type", "x-custom"], false),
+			// at most one '*' in a pattern is allowed
+			(&["x-*-*"], &["x-a-b"], false),
+		];
+
+		for (allow_headers, requested_headers, expect_match) in cases {
+			let rule = cors_rule(&["*"], &["GET"], allow_headers);
+			let got = cors_rule_matches(
+				&rule,
+				"https://app.example.test",
+				"GET",
+				requested_headers.iter(),
+			);
+			assert_eq!(
+				got, *expect_match,
+				"allow_headers={allow_headers:?}, requested_headers={requested_headers:?}: expected match={expect_match}, got {got}"
+			);
+		}
+	}
 
 	fn bucket_params_with_rule(allow_origins: Vec<&str>) -> BucketParams {
 		let mut bucket_params = BucketParams::default();
